@@ -5,37 +5,42 @@ local UIS=game:GetService("UserInputService")
 local cam=workspace.CurrentCamera
 local PGUI=P:WaitForChild("PlayerGui")
 
--- УБОРКА ПРЕДЫДУЩИХ ЗАПУСКОВ (иначе кнопки мёртвые)
 for _,g in ipairs(PGUI:GetChildren())do
  if g.Name=="CombatGui"or g.Name=="CrashError"then g:Destroy()end
+end
+for _,d in ipairs(workspace:GetDescendants())do
+ if d.Name=="NaHL"or d.Name=="NaESP"then pcall(function()d:Destroy()end)end
 end
 pcall(function()RS:UnbindFromRenderStep("NaAim")end)
 pcall(function()RS:UnbindFromRenderStep("AIM")end)
 
 local okD,Dr=pcall(function()return Drawing end)
 local hasD=okD and Dr~=nil and Dr.new~=nil
-local function dnew(k)if hasD then return Dr.new(k)end return nil end
+local hasMouseMove=type(mousemoverel)=="function"
+local hasM1=type(mouse1click)=="function"
 
 local LOCK=nil
 local lastFire=0
 local AIM,ESP,TRIG=false,false,false
 local clicks={aim=0,esp=0,trig=0}
+local TARGETS={}
+local npcTargets={}
 local WHEEL={}
 local function cyc(list,i)return list[i%#list+1],(i%#list)+1 end
 WHEEL.HOLD={"Always","Mouse1","Mouse2","E","LeftAlt"}local hI=1
 WHEEL.FOV={30,60,90,120,180,270,360}local fI=4
 WHEEL.SM={0,0.05,0.1,0.2,0.3,0.4,0.6,0.8}local sI=3
-WHEEL.PART={"Head","UpperTorso","HumanoidRootPart"}local pI=1
-WHEEL.DIST={200,500,1000,2000,5000}local dI=3
+WHEEL.PART={"Head","UpperTorso","HumanoidRootPart","Any"}local pI=1
+WHEEL.DIST={200,500,1000,2000,5000,10000}local dI=5
 WHEEL.MODE={"Crosshair","Distance","Health"}local mI=1
 WHEEL.TSIZE={12,14,16,18,20}local tI=3
-WHEEL.EDIST={200,500,1000,2000,5000}local edI=2
+WHEEL.EDIST={500,1000,2000,5000,10000}local edI=3
 WHEEL.THOLD={"Always","Mouse1","Mouse2"}local thI=1
 WHEEL.DELAY={0,25,50,75,100,150,250}local dlI=3
-WHEEL.TFOV={1,2,3,5,8,12}local tfI=2
-WHEEL.TPART={"Head","UpperTorso","HumanoidRootPart"}local tpI=1
+WHEEL.TFOV={1,2,3,5,8,12}local tfI=3
+WHEEL.TPART={"Head","UpperTorso","HumanoidRootPart","Any"}local tpI=1
 local A_VIS,A_TEAM,A_ROT,A_CIRC=true,true,true,true
-local E_BOX,E_NAME,E_HP,E_DIST,E_TEAM=true,true,true,true,true
+local E_HL,E_NAME,E_HP,E_DIST,E_TEAM=true,true,true,true,true
 local T_VIS,T_TEAM,T_AUTO=true,true,true
 
 local sg=Instance.new("ScreenGui")
@@ -56,10 +61,10 @@ local sbtn=topBtn("Gear",62)
 local hint=Instance.new("TextLabel")hint.Size=UDim2.fromOffset(380,16)hint.Position=UDim2.new(.5,-190,.02,36)
 hint.BackgroundTransparency=1 hint.Text="T=AIM Y=ESP U=TRIG RightCtrl=settings"
 hint.TextColor3=Color3.fromRGB(160,160,160)hint.Font=Enum.Font.Gotham hint.TextSize=11 hint.Parent=sg
-local dbg=Instance.new("TextLabel")dbg.Size=UDim2.fromOffset(420,16)dbg.Position=UDim2.new(0,6,1,-20)
+local dbg=Instance.new("TextLabel")dbg.Size=UDim2.fromOffset(460,16)dbg.Position=UDim2.new(0,6,1,-20)
 dbg.BackgroundTransparency=1 dbg.TextXAlignment=Enum.TextXAlignment.Left
 dbg.TextColor3=Color3.fromRGB(255,220,0)dbg.Font=Enum.Font.Code dbg.TextSize=12 dbg.Parent=sg
-local function dbgUpd()dbg.Text=string.format("[Drawing=%s] aim=%d esp=%d trig=%d",hasD and"OK"or"NONE",clicks.aim,clicks.esp,clicks.trig)end
+local function dbgUpd()dbg.Text=string.format("[Draw=%s Move=%s] targets=%d aim=%d esp=%d trig=%d",hasD and"OK"or"N",hasMouseMove and"OK"or"N",#TARGETS,clicks.aim,clicks.esp,clicks.trig)end
 dbgUpd()
 
 local pnl=Instance.new("Frame")pnl.Size=UDim2.fromOffset(184,340)pnl.Position=UDim2.new(.5,-92,.02,56)
@@ -116,9 +121,9 @@ row(fA,"Team check",function()return A_TEAM and"ON"or"OFF"end,function()A_TEAM=n
 row(fA,"Rotate char",function()return A_ROT and"ON"or"OFF"end,function()A_ROT=not A_ROT end)
 row(fA,"FOV circle",function()return A_CIRC and"ON"or"OFF"end,function()A_CIRC=not A_CIRC end)
 
-row(fE,"Box",function()return E_BOX and"ON"or"OFF"end,function()E_BOX=not E_BOX end)
+row(fE,"Highlight",function()return E_HL and"ON"or"OFF"end,function()E_HL=not E_HL end)
 row(fE,"Name",function()return E_NAME and"ON"or"OFF"end,function()E_NAME=not E_NAME end)
-row(fE,"HP bar",function()return E_HP and"ON"or"OFF"end,function()E_HP=not E_HP end)
+row(fE,"Health",function()return E_HP and"ON"or"OFF"end,function()E_HP=not E_HP end)
 row(fE,"Distance",function()return E_DIST and"ON"or"OFF"end,function()E_DIST=not E_DIST end)
 row(fE,"Team check",function()return E_TEAM and"ON"or"OFF"end,function()E_TEAM=not E_TEAM end)
 row(fE,"Text size",function()return WHEEL.TSIZE[tI]end,function()local _,n=cyc(WHEEL.TSIZE,tI)tI=n end)
@@ -132,7 +137,7 @@ row(fT,"Visible check",function()return T_VIS and"ON"or"OFF"end,function()T_VIS=
 row(fT,"Team check",function()return T_TEAM and"ON"or"OFF"end,function()T_TEAM=not T_TEAM end)
 row(fT,"Auto fire",function()return T_AUTO and"ON"or"OFF"end,function()T_AUTO=not T_AUTO end)
 
-local circle=dnew("Circle")
+local circle=dnew and dnew("Circle")
 if circle then
  circle.Thickness=1.5 circle.Filled=false circle.Color=Color3.fromRGB(0,255,120)
  circle.Transparency=.6 circle.NumSides=60 circle.Visible=false
@@ -146,80 +151,167 @@ local function keyDown(name)
  if name=="LeftAlt"then return UIS:IsKeyDown(Enum.KeyCode.LeftAlt)end
  return false
 end
-local function isEnemy(plr,tc)return plr~=P and not(tc and plr.Team and P.Team and plr.Team==P.Team)end
-local function partOf(ch,part)return ch and(ch:FindFirstChild(part)or ch:FindFirstChild("Head")or ch:FindFirstChild("HumanoidRootPart"))end
-local function visible(o,t)
- local pr=RaycastParams.new()pr.FilterType=Enum.RaycastFilterType.Exclude
- pr.FilterDescendantsInstances={P.Character}
- local hit=workspace:Raycast(o,t.Position-o,pr)
- return not hit or hit.Instance==t or hit.Instance:IsDescendantOf(t.Parent)
+local function pickPart(ch,sel)
+ if not ch then return nil end
+ if sel~="Any"then
+  local n=ch:FindFirstChild(sel)
+  if n and n:IsA("BasePart")then return n end
+ end
+ local h=ch:FindFirstChild("Head")
+ if h and h:IsA("BasePart")then return h end
+ local r=ch:FindFirstChild("HumanoidRootPart")
+ if r and r:IsA("BasePart")then return r end
+ local up=ch:FindFirstChild("UpperTorso")
+ if up and up:IsA("BasePart")then return up end
+ for _,d in ipairs(ch:GetDescendants())do
+  if d:IsA("BasePart")then return d end
+ end
+ return nil
 end
-local function ang(o,l,p)local d=p-o if d.Magnitude<.001 then return 180 end
+local function isEnemy(plr,tc)
+ if not plr then return true end
+ return plr~=P and not(tc and plr.Team and P.Team and plr.Team==P.Team)
+end
+local function visible(o,pospart)
+ local pr=RaycastParams.new()pr.FilterType=Enum.RaycastFilterType.Exclude
+ local ig={P.Character}
+ if LOCK and LOCK.ch and LOCK.ch.Parent then ig[#ig+1]=LOCK.ch end
+ pr.FilterDescendantsInstances=ig
+ local hit=workspace:Raycast(o,pospart.Position-o,pr)
+ return not hit or hit.Instance:IsDescendantOf(pospart.Parent)or hit.Instance==pospart
+end
+local function ang(l,p)local o=cam.CFrame.Position local d=p-o
+ if d.Magnitude<.001 then return 180 end
  return math.deg(math.acos(math.clamp(d.Unit:Dot(l),-1,1)))end
+
+local function scanNPC()
+ local list={}
+ local function walk(node,depth)
+  if depth>4 or #list>400 then return end
+  for _,c in ipairs(node:GetChildren())do
+   if c:IsA("Humanoid")then
+    local m=c.Parent
+    if m and m~=P.Character and not game.Players:GetPlayerFromCharacter(m)then
+     list[#list+1]={ch=m,hum=c,plr=nil}
+    end
+   elseif c:IsA("Model")or c:IsA("Folder")or c:IsA("Workspace")then
+    walk(c,depth+1)
+   end
+  end
+ end
+ pcall(function()walk(workspace,0)end)
+ npcTargets=list
+end
+
+task.spawn(function()
+ while true do
+  local list={}
+  for _,plr in ipairs(game.Players:GetPlayers())do
+   if plr~=P and plr.Character then
+    local hum=plr.Character:FindFirstChildOfClass("Humanoid")
+    if hum then list[#list+1]={ch=plr.Character,hum=hum,plr=plr} end
+   end
+  end
+  for _,t in ipairs(npcTargets)do
+   if t.ch and t.ch.Parent then list[#list+1]=t end
+  end
+  TARGETS=list
+  task.wait(.15)
+ end
+end)
+task.spawn(function()
+ while true do
+  pcall(scanNPC)
+  task.wait(1.5)
+ end
+end)
 
 RS:BindToRenderStep("NaAim",Enum.RenderPriority.Last.Value,function()
  if not AIM then LOCK=nil return end
  if not keyDown(WHEEL.HOLD[hI])then LOCK=nil return end
- local o,l=cam.CFrame.Position,cam.CFrame.LookVector
+ local look=cam.CFrame.LookVector
  local fov=WHEEL.FOV[fI]local maxd=WHEEL.DIST[dI]
- local t=LOCK and partOf(LOCK.Character,WHEEL.PART[pI])
- if not t or (t.Position-o).Magnitude>maxd or(A_VIS and not visible(o,t))then
-  t=nil LOCK=nil
+ local o=cam.CFrame.Position
+ local tgt=nil
+ if LOCK then
+  local pp=LOCK.pt
+  if pp and pp.Parent and LOCK.hum and LOCK.hum.Health>0 and (pp.Position-o).Magnitude<=maxd and(not A_VIS or visible(o,pp))then
+   tgt=LOCK
+  else LOCK=nil end
+ end
+ if not tgt then
   local bs=1e9
-  for _,p in ipairs(game.Players:GetPlayers())do
-   if isEnemy(p,A_TEAM)then
-    local ch=p.Character
-    local hum=ch and ch:FindFirstChildOfClass("Humanoid")
-    local h=partOf(ch,WHEEL.PART[pI])
-    if h and hum and hum.Health>0 and (h.Position-o).Magnitude<=maxd and ang(o,l,h.Position)<=fov and(not A_VIS or visible(o,h))then
-     local score
-     if WHEEL.MODE[mI]=="Crosshair"then score=ang(o,l,h.Position)+(h.Position-o).Magnitude*.005
-     elseif WHEEL.MODE[mI]=="Distance"then score=(h.Position-o).Magnitude
-     else score=hum.Health end
-     if score<bs then bs=score t=h LOCK=p end
+  for _,t in ipairs(TARGETS)do
+   if isEnemy(t.plr,A_TEAM)and t.hum and t.hum.Health>0 then
+    local pp=pickPart(t.ch,WHEEL.PART[pI])
+    if pp and (pp.Position-o).Magnitude<=maxd and ang(look,pp.Position)<=fov and(not A_VIS or visible(o,pp))then
+     local sc
+     if WHEEL.MODE[mI]=="Crosshair"then sc=ang(look,pp.Position)+(pp.Position-o).Magnitude*.005
+     elseif WHEEL.MODE[mI]=="Distance"then sc=(pp.Position-o).Magnitude
+     else sc=t.hum.Health end
+     if sc<bs then bs=sc tgt={ch=t.ch,hum=t.hum,plr=t.plr,pt=pp}end
     end
    end
   end
+  LOCK=tgt
  end
- if not t then return end
- local goal=CFrame.lookAt(o,t.Position)
- if WHEEL.SM[sI]==0 then cam.CFrame=goal else cam.CFrame=cam.CFrame:Lerp(goal,math.clamp(1-WHEEL.SM[sI],0.05,1))end
+ if not tgt then return end
+ local pp=tgt.pt if not pp or not pp.Parent then return end
+ local locked=UIS.MouseBehavior==Enum.MouseBehavior.LockCenter or UIS.MouseBehavior==Enum.MouseBehavior.LockCurrentPosition
+ if locked and hasMouseMove then
+  local sp,on=cam:WorldToViewportPoint(pp.Position)
+  if on then
+   local vs=cam.ViewportSize
+   local dx=sp.X-vs.X/2 local dy=sp.Y-vs.Y/2
+   local k=(1-WHEEL.SM[sI])
+   if math.abs(dx)>.5 or math.abs(dy)>.5 then mousemoverel(dx*k,dy*k)end
+  end
+ else
+  local goal=CFrame.lookAt(o,pp.Position)
+  if WHEEL.SM[sI]==0 then cam.CFrame=goal else cam.CFrame=cam.CFrame:Lerp(goal,math.clamp(1-WHEEL.SM[sI],.05,1))end
+ end
  if A_ROT then
   local r=P.Character and P.Character:FindFirstChild("HumanoidRootPart")
   local h=P.Character and P.Character:FindFirstChildOfClass("Humanoid")
   if r and h then
    h.AutoRotate=false
-   local f=Vector3.new(t.Position.X-r.Position.X,0,t.Position.Z-r.Position.Z)
+   local f=Vector3.new(pp.Position.X-r.Position.X,0,pp.Position.Z-r.Position.Z)
    if f.Magnitude>.1 then r.CFrame=CFrame.lookAt(r.Position,r.Position+f)end
   end
  end
 end)
 
 local function fire()
- if mouse1click then pcall(mouse1click)
+ if hasM1 then pcall(mouse1click)
  else local t=P.Character and P.Character:FindFirstChildWhichIsA("Tool")if t then pcall(function()t:Activate()end)end end
 end
-
+local function fovPix(deg)
+ local vs=cam.ViewportSize
+ return (math.tan(math.rad(deg))/math.tan(math.rad(cam.FieldOfView*.5)))*(vs.Y/2)
+end
 task.spawn(function()
  local t0=0
  while true do
   local dt=task.wait()
   if TRIG and keyDown(WHEEL.THOLD[thI])then
-   local o,l=cam.CFrame.Position,cam.CFrame.LookVector
+   local o=cam.CFrame.Position
+   local vs=cam.ViewportSize
+   local rpix=fovPix(WHEEL.TFOV[tfI])
    local found=false
-   for _,p in ipairs(game.Players:GetPlayers())do
-    if isEnemy(p,T_TEAM)then
-     local ch=p.Character
-     local hum=ch and ch:FindFirstChildOfClass("Humanoid")
-     local h=partOf(ch,WHEEL.TPART[tpI])
-     if h and hum and hum.Health>0 and ang(o,l,h.Position)<=WHEEL.TFOV[tfI]and(not T_VIS or visible(o,h))then
-      found=true break
+   for _,t in ipairs(TARGETS)do
+    if isEnemy(t.plr,T_TEAM)and t.hum and t.hum.Health>0 then
+     local pp=pickPart(t.ch,WHEEL.TPART[tpI])
+     if pp then
+      local sp,on=cam:WorldToViewportPoint(pp.Position)
+      if on and (Vector2.new(sp.X-vs.X/2,sp.Y-vs.Y/2)).Magnitude<=rpix and(not T_VIS or visible(o,pp))then
+       found=true break
+      end
      end
     end
    end
    if found then
     t0=t0+dt
-    if t0>=WHEEL.DELAY[dlI]/1000 and(tick()-lastFire)>0.1 then
+    if t0>=WHEEL.DELAY[dlI]/1000 and(tick()-lastFire)>.1 then
      if T_AUTO then fire()end
      lastFire=tick()t0=0
     end
@@ -229,55 +321,90 @@ task.spawn(function()
 end)
 
 local esp={}
-local function create()
- if not hasD then return nil end
- local d={}
- d.box=Dr.new("Square")d.box.Thickness=1.5 d.box.Filled=false d.box.Transparency=1
- d.name=Dr.new("Text")d.name.Center=true d.name.Outline=true d.name.OutlineColor=Color3.new(0,0,0)d.name.Transparency=1
- d.hpbg=Dr.new("Square")d.hpbg.Filled=true d.hpbg.Color=Color3.new(0,0,0)d.hpbg.Transparency=.5
- d.hp=Dr.new("Square")d.hp.Filled=true d.hp.Color=Color3.fromRGB(0,255,0)d.hp.Transparency=1
- d.dist=Dr.new("Text")d.dist.Center=true d.dist.Outline=true d.dist.OutlineColor=Color3.new(0,0,0)d.dist.Transparency=1
- return d
+local function ensureESP(model)
+ local e=esp[model]
+ if not e then e={}esp[model]=e end
+ if not e.hl or e.hl.Parent~=model then
+  if e.hl then e.hl:Destroy()end
+  local hl=Instance.new("Highlight")hl.Name="NaHL"hl.Parent=model
+  hl.FillTransparency=.6 hl.OutlineTransparency=0
+  pcall(function()hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop end)
+  e.hl=hl
+ end
+ if not e.bg or not e.bg.Parent then
+  if e.bg then e.bg:Destroy()end
+  local bg=Instance.new("BillboardGui")bg.Name="NaESP"
+  bg.Size=UDim2.fromOffset(150,48)bg.StudsOffset=Vector3.new(0,3,0)
+  bg.AlwaysOnTop=true bg.ResetOnSpawn=false
+  pcall(function()bg.MaxDistance=100000 end)
+  local tx=Instance.new("TextLabel")tx.Size=UDim2.fromScale(1,1)tx.BackgroundTransparency=1
+  tx.Font=Enum.Font.GothamBold tx.TextScaled=true tx.TextColor3=Color3.new(1,1,1)
+  tx.TextStrokeTransparency=0 tx.TextStrokeColor3=Color3.new(0,0,0)tx.Text=""
+  tx.Parent=bg
+  e.bg=bg e.txt=tx
+ end
+ return e
 end
-local function hide(d)if not d then return end d.box.Visible=false d.name.Visible=false d.hpbg.Visible=false d.hp.Visible=false d.dist.Visible=false end
-local function getD(plr)if not hasD then return nil end if not esp[plr]then esp[plr]=create()end return esp[plr]end
+local function wipeESP()
+ for m,e in pairs(esp)do
+  if e.hl then e.hl:Destroy()end
+  if e.bg then e.bg:Destroy()end
+  esp[m]=nil
+ end
+end
+local wtick=0
 RS.RenderStepped:Connect(function()
- local vs=cam.ViewportSize
  if circle then
   if AIM and A_CIRC then
-   local r=(math.tan(math.rad(WHEEL.FOV[fI]))/math.tan(math.rad(cam.FieldOfView*0.5)))*(vs.Y/2)
+   local vs=cam.ViewportSize
+   local r=(math.tan(math.rad(WHEEL.FOV[fI]))/math.tan(math.rad(cam.FieldOfView*.5)))*(vs.Y/2)
    circle.Position=Vector2.new(vs.X/2,vs.Y/2)circle.Radius=math.clamp(r,5,vs.Y)circle.Visible=true
   else circle.Visible=false end
  end
- if not ESP or not hasD then return end
+ if not ESP then return end
+ local o=cam.CFrame.Position
  local maxd=WHEEL.EDIST[edI]
- for _,plr in ipairs(game.Players:GetPlayers())do
-  if plr~=P then
-   local d=getD(plr)
-   if d then
-    local ch=plr.Character
-    local hum=ch and ch:FindFirstChildOfClass("Humanoid")
-    local hrp=ch and ch:FindFirstChild("HumanoidRootPart")
-    local head=ch and ch:FindFirstChild("Head")
-    if not(hum and hrp and head and hum.Health>0)then hide(d)continue end
-    if E_TEAM and plr.Team and P.Team and plr.Team==P.Team then hide(d)continue end
-    if (hrp.Position-cam.CFrame.Position).Magnitude>maxd then hide(d)continue end
-    local top,on1=cam:WorldToViewportPoint(head.Position+Vector3.new(0,0.8,0))
-    local bot,on2=cam:WorldToViewportPoint(hrp.Position-Vector3.new(0,3,0))
-    if not on1 and not on2 then hide(d)continue end
-    local hgt=math.abs(bot.Y-top.Y)local w=hgt*0.55
-    local x=top.X-w/2 local y=top.Y
-    local col=(P.Team and plr.Team and plr.Team==P.Team)and Color3.fromRGB(0,255,90)or Color3.fromRGB(255,60,60)
-    d.box.Visible=E_BOX d.box.Color=col d.box.Position=Vector2.new(x,y)d.box.Size=Vector2.new(w,hgt)
-    d.name.Visible=E_NAME d.name.Text=plr.DisplayName d.name.Color=col d.name.Size=WHEEL.TSIZE[tI]d.name.Position=Vector2.new(top.X,y-19)
-    d.dist.Visible=E_DIST d.dist.Text=string.format("%dm",math.floor((hrp.Position-cam.CFrame.Position).Magnitude))
-    d.dist.Color=col d.dist.Size=WHEEL.TSIZE[tI]-2 d.dist.Position=Vector2.new(top.X,y+hgt+3)
-    local frac=math.clamp(hum.Health/math.max(hum.MaxHealth,1),0,1)
-    d.hpbg.Visible=E_HP d.hpbg.Position=Vector2.new(x-8,y)d.hpbg.Size=Vector2.new(4,hgt)
-    d.hp.Visible=E_HP d.hp.Color=Color3.fromRGB(255,0,0):Lerp(Color3.fromRGB(0,255,0),frac)
-    d.hp.Position=Vector2.new(x-8,y+hgt*(1-frac))d.hp.Size=Vector2.new(4,hgt*frac)
+ for _,t in ipairs(TARGETS)do
+  local ok=true
+  if t.plr==P then ok=false end
+  if ok and E_TEAM and t.plr and t.plr.Team and P.Team and t.plr.Team==P.Team then ok=false end
+  if ok and not(t.hum and t.hum.Health>0)then ok=false end
+  local pp=pickPart(t.ch,"Head")
+  if ok and not pp then ok=false end
+  if ok and (pp.Position-o).Magnitude>maxd then ok=false end
+  local e=ensureESP(t.ch)
+  if ok then
+   local col=(t.plr and P.Team and t.plr.Team and t.plr.Team==P.Team)and Color3.fromRGB(0,255,90)or Color3.fromRGB(255,60,60)
+   if e.hl then
+    e.hl.Enabled=E_HL e.hl.FillColor=col e.hl.OutlineColor=col
+   end
+   if e.bg and pp then
+    if e.bg.Parent~=pp then e.bg.Parent=pp end
+    e.bg.Enabled=true
+    local nm=t.plr and t.plr.DisplayName or t.ch.Name
+    local parts={}
+    if E_NAME then parts[#parts+1]=nm end
+    if E_HP then parts[#parts+1]="HP "..math.floor(t.hum.Health)end
+    if E_DIST then parts[#parts+1]=math.floor((pp.Position-o).Magnitude).."m" end
+    e.txt.Text=table.concat(parts,"  ")
+    e.txt.TextSize=WHEEL.TSIZE[tI]
+    e.txt.TextColor3=col
+   end
+  else
+   if e.hl then e.hl.Enabled=false end
+   if e.bg then e.bg.Enabled=false end
+  end
+ end
+ wtick=wtick+1
+ if wtick%180==0 then
+  for m,e in pairs(esp)do
+   if not m.Parent then
+    if e.hl then e.hl:Destroy()end
+    if e.bg then e.bg:Destroy()end
+    esp[m]=nil
    end
   end
+  dbgUpd()
  end
 end)
 
@@ -290,7 +417,7 @@ end
 local function setEsp(v)
  ESP=v espBtn.Text="ESP: "..(v and"ON"or"OFF")
  espBtn.BackgroundColor3=v and Color3.fromRGB(0,140,70)or Color3.fromRGB(38,38,42)
- if not v then for _,d in pairs(esp)do hide(d)end end
+ if not v then wipeESP()end
  clicks.esp=clicks.esp+1 dbgUpd()
 end
 local function setTrig(v)
