@@ -24,7 +24,7 @@ local lastFire=0
 local AIM,ESP,TRIG=false,false,false
 local clicks={aim=0,esp=0,trig=0}
 local TARGETS={}
-local npcTargets={}
+local npcRigs={}
 local WHEEL={}
 local function cyc(list,i)return list[i%#list+1],(i%#list)+1 end
 WHEEL.HOLD={"Always","Mouse1","Mouse2","E","LeftAlt"}local hI=1
@@ -172,6 +172,10 @@ local function isEnemy(plr,tc)
  if not plr then return true end
  return plr~=P and not(tc and plr.Team and P.Team and plr.Team==P.Team)
 end
+local function alive(t)
+ if t.hum then return t.hum.Health>0 end
+ return true
+end
 local function visible(o,pospart)
  local pr=RaycastParams.new()pr.FilterType=Enum.RaycastFilterType.Exclude
  local ig={P.Character}
@@ -184,36 +188,50 @@ local function ang(l,p)local o=cam.CFrame.Position local d=p-o
  if d.Magnitude<.001 then return 180 end
  return math.deg(math.acos(math.clamp(d.Unit:Dot(l),-1,1)))end
 
-local function scanNPC()
+local function isRig(m)
+ if not m:IsA("Model")then return false end
+ local h=m:FindFirstChild("Head")
+ local r=m:FindFirstChild("HumanoidRootPart")
+ return (h~=nil and h:IsA("BasePart"))and(r~=nil)
+end
+local function scanRigs()
  local list={}
  local function walk(node,depth)
   if depth>4 or #list>400 then return end
   for _,c in ipairs(node:GetChildren())do
-   if c:IsA("Humanoid")then
-    local m=c.Parent
-    if m and m~=P.Character and not game.Players:GetPlayerFromCharacter(m)then
-     list[#list+1]={ch=m,hum=c,plr=nil}
+   if c:IsA("Model")then
+    if c~=P.Character and isRig(c)then
+     list[#list+1]=c
+    else
+     walk(c,depth+1)
     end
-   elseif c:IsA("Model")or c:IsA("Folder")or c:IsA("Workspace")then
+   elseif c:IsA("Folder")or c:IsA("Workspace")then
     walk(c,depth+1)
    end
   end
  end
  pcall(function()walk(workspace,0)end)
- npcTargets=list
+ return list
 end
 
 task.spawn(function()
  while true do
   local list={}
-  for _,plr in ipairs(game.Players:GetPlayers())do
-   if plr~=P and plr.Character then
-    local hum=plr.Character:FindFirstChildOfClass("Humanoid")
-    if hum then list[#list+1]={ch=plr.Character,hum=hum,plr=plr} end
-   end
+  local seen={}
+  local function add(ch,plr)
+   if not ch or ch==P.Character or seen[ch]then return end
+   if not(ch:FindFirstChild("Head")or ch:FindFirstChild("HumanoidRootPart")or ch:FindFirstChildOfClass("Humanoid"))then return end
+   seen[ch]=true
+   list[#list+1]={ch=ch,hum=ch:FindFirstChildOfClass("Humanoid"),plr=plr}
   end
-  for _,t in ipairs(npcTargets)do
-   if t.ch and t.ch.Parent then list[#list+1]=t end
+  for _,pl in ipairs(game.Players:GetPlayers())do
+   if pl~=P then add(pl.Character,pl)end
+  end
+  for _,m in ipairs(npcRigs)do
+   if m.Parent then
+    local pl=game.Players:GetPlayerFromCharacter(m)or game.Players:FindFirstChild(m.Name)
+    add(m,pl)
+   end
   end
   TARGETS=list
   task.wait(.15)
@@ -221,8 +239,8 @@ task.spawn(function()
 end)
 task.spawn(function()
  while true do
-  pcall(scanNPC)
-  task.wait(1.5)
+  pcall(function()npcRigs=scanRigs()end)
+  task.wait(1.2)
  end
 end)
 
@@ -235,20 +253,20 @@ RS:BindToRenderStep("NaAim",Enum.RenderPriority.Last.Value,function()
  local tgt=nil
  if LOCK then
   local pp=LOCK.pt
-  if pp and pp.Parent and LOCK.hum and LOCK.hum.Health>0 and (pp.Position-o).Magnitude<=maxd and(not A_VIS or visible(o,pp))then
+  if pp and pp.Parent and alive(LOCK)and (pp.Position-o).Magnitude<=maxd and(not A_VIS or visible(o,pp))then
    tgt=LOCK
   else LOCK=nil end
  end
  if not tgt then
   local bs=1e9
   for _,t in ipairs(TARGETS)do
-   if isEnemy(t.plr,A_TEAM)and t.hum and t.hum.Health>0 then
+   if isEnemy(t.plr,A_TEAM)and alive(t)then
     local pp=pickPart(t.ch,WHEEL.PART[pI])
     if pp and (pp.Position-o).Magnitude<=maxd and ang(look,pp.Position)<=fov and(not A_VIS or visible(o,pp))then
      local sc
      if WHEEL.MODE[mI]=="Crosshair"then sc=ang(look,pp.Position)+(pp.Position-o).Magnitude*.005
      elseif WHEEL.MODE[mI]=="Distance"then sc=(pp.Position-o).Magnitude
-     else sc=t.hum.Health end
+     else sc=t.hum and t.hum.Health or 1e9 end
      if sc<bs then bs=sc tgt={ch=t.ch,hum=t.hum,plr=t.plr,pt=pp}end
     end
    end
@@ -299,7 +317,7 @@ task.spawn(function()
    local rpix=fovPix(WHEEL.TFOV[tfI])
    local found=false
    for _,t in ipairs(TARGETS)do
-    if isEnemy(t.plr,T_TEAM)and t.hum and t.hum.Health>0 then
+    if isEnemy(t.plr,T_TEAM)and alive(t)then
      local pp=pickPart(t.ch,WHEEL.TPART[tpI])
      if pp then
       local sp,on=cam:WorldToViewportPoint(pp.Position)
@@ -368,7 +386,7 @@ RS.RenderStepped:Connect(function()
   local ok=true
   if t.plr==P then ok=false end
   if ok and E_TEAM and t.plr and t.plr.Team and P.Team and t.plr.Team==P.Team then ok=false end
-  if ok and not(t.hum and t.hum.Health>0)then ok=false end
+  if ok and not alive(t)then ok=false end
   local pp=pickPart(t.ch,"Head")
   if ok and not pp then ok=false end
   if ok and (pp.Position-o).Magnitude>maxd then ok=false end
@@ -384,7 +402,7 @@ RS.RenderStepped:Connect(function()
     local nm=t.plr and t.plr.DisplayName or t.ch.Name
     local parts={}
     if E_NAME then parts[#parts+1]=nm end
-    if E_HP then parts[#parts+1]="HP "..math.floor(t.hum.Health)end
+    if E_HP then parts[#parts+1]="HP "..(t.hum and math.floor(t.hum.Health)or"?")end
     if E_DIST then parts[#parts+1]=math.floor((pp.Position-o).Magnitude).."m" end
     e.txt.Text=table.concat(parts,"  ")
     e.txt.TextSize=WHEEL.TSIZE[tI]
