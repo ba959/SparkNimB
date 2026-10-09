@@ -1,7 +1,15 @@
 local P=game.Players.LocalPlayer
+local function boot()
 local RS=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
 local cam=workspace.CurrentCamera
+local PGUI=P:WaitForChild("PlayerGui")
+
+for _,g in ipairs(PGUI:GetChildren())do
+ if g.Name=="CombatGui"or g.Name=="CrashError"then g:Destroy()end
+end
+pcall(function()RS:UnbindFromRenderStep("NaAim")end)
+pcall(function()RS:UnbindFromRenderStep("AIM")end)
 
 local okD,Dr=pcall(function()return Drawing end)
 local hasD=okD and Dr~=nil and Dr.new~=nil
@@ -29,15 +37,14 @@ local A_VIS,A_TEAM,A_ROT,A_CIRC=true,true,true,true
 local E_BOX,E_NAME,E_HP,E_DIST,E_TEAM=true,true,true,true,true
 local T_VIS,T_TEAM,T_AUTO=true,true,true
 
-local pg=P:WaitForChild("PlayerGui")
 local sg=Instance.new("ScreenGui")
 sg.Name="CombatGui"sg.ResetOnSpawn=false sg.IgnoreGuiInset=true
-sg.DisplayOrder=999999 sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling sg.Parent=pg
+sg.DisplayOrder=999999 sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling sg.Parent=PGUI
 
 local function topBtn(t,x)
  local b=Instance.new("TextButton")b.Size=UDim2.fromOffset(74,32)b.Position=UDim2.new(.5,x,.02,0)
  b.BackgroundColor3=Color3.fromRGB(38,38,42)b.TextColor3=Color3.new(1,1,1)
- b.Font=Enum.Font.GothamBold b.TextSize=13 b.Active=true b.AutoButtonColor=true
+ b.Font=Enum.Font.GothamBold b.TextSize=13 b.Active=true b.AutoButtonColor=true b.ZIndex=10
  b.Text=t b.Parent=sg
  Instance.new("UICorner",b).CornerRadius=UDim.new(0,8)return b
 end
@@ -45,16 +52,16 @@ local aimBtn=topBtn("AIM: OFF",-172)
 local espBtn=topBtn("ESP: OFF",-94)
 local trigBtn=topBtn("TRIG: OFF",-16)
 local sbtn=topBtn("Gear",62)
-local hint=Instance.new("TextLabel")hint.Size=UDim2.fromOffset(380,16)hint.Position=UDim2.new(.5,-190,.02,34)
-hint.BackgroundTransparency=1 hint.Text="T=AIM Y=ESP U=TRIG | click Gear = settings"
+local hint=Instance.new("TextLabel")hint.Size=UDim2.fromOffset(380,16)hint.Position=UDim2.new(.5,-190,.02,36)
+hint.BackgroundTransparency=1 hint.Text="T=AIM Y=ESP U=TRIG RightCtrl=settings"
 hint.TextColor3=Color3.fromRGB(160,160,160)hint.Font=Enum.Font.Gotham hint.TextSize=11 hint.Parent=sg
-local dbg=Instance.new("TextLabel")dbg.Size=UDim2.fromOffset(400,16)dbg.Position=UDim2.new(0,6,1,-20)
+local dbg=Instance.new("TextLabel")dbg.Size=UDim2.fromOffset(420,16)dbg.Position=UDim2.new(0,6,1,-20)
 dbg.BackgroundTransparency=1 dbg.TextXAlignment=Enum.TextXAlignment.Left
 dbg.TextColor3=Color3.fromRGB(255,220,0)dbg.Font=Enum.Font.Code dbg.TextSize=12 dbg.Parent=sg
 local function dbgUpd()dbg.Text=string.format("[Drawing=%s] aim=%d esp=%d trig=%d",hasD and"OK"or"NONE",clicks.aim,clicks.esp,clicks.trig)end
 dbgUpd()
 
-local pnl=Instance.new("Frame")pnl.Size=UDim2.fromOffset(184,340)pnl.Position=UDim2.new(.5,-92,.02,54)
+local pnl=Instance.new("Frame")pnl.Size=UDim2.fromOffset(184,340)pnl.Position=UDim2.new(.5,-92,.02,56)
 pnl.BackgroundColor3=Color3.fromRGB(15,15,17)pnl.BackgroundTransparency=.08 pnl.Visible=false pnl.ZIndex=5 pnl.Parent=sg
 Instance.new("UICorner",pnl).CornerRadius=UDim.new(0,10)
 local pst=Instance.new("UIStroke",pnl)pst.Thickness=2 pst.Color=Color3.fromRGB(0,200,255)
@@ -149,7 +156,7 @@ end
 local function ang(o,l,p)local d=p-o if d.Magnitude<.001 then return 180 end
  return math.deg(math.acos(math.clamp(d.Unit:Dot(l),-1,1)))end
 
-RS:BindToRenderStep("AIM",Enum.RenderPriority.Last.Value,function()
+RS:BindToRenderStep("NaAim",Enum.RenderPriority.Last.Value,function()
  if not AIM then LOCK=nil return end
  if not keyDown(WHEEL.HOLD[hI])then LOCK=nil return end
  local o,l=cam.CFrame.Position,cam.CFrame.LookVector
@@ -295,8 +302,20 @@ espBtn.MouseButton1Click:Connect(function()setEsp(not ESP)end)
 trigBtn.MouseButton1Click:Connect(function()setTrig(not TRIG)end)
 sbtn.MouseButton1Click:Connect(function()pnl.Visible=not pnl.Visible end)
 sbtn.MouseButton2Click:Connect(function()pnl.Visible=not pnl.Visible end)
-UIS.InputBegan:Connect(function(i,g)if g then return end
+UIS.InputBegan:Connect(function(i)
  if i.KeyCode==Enum.KeyCode.T then setAim(not AIM)end
  if i.KeyCode==Enum.KeyCode.Y then setEsp(not ESP)end
  if i.KeyCode==Enum.KeyCode.U then setTrig(not TRIG)end
+ if i.KeyCode==Enum.KeyCode.RightControl then pnl.Visible=not pnl.Visible end
 end)
+end
+
+local ok,err=xpcall(boot,function(e)return tostring(e)end)
+if not ok then
+ local pg=game.Players.LocalPlayer:WaitForChild("PlayerGui")
+ local sg=Instance.new("ScreenGui")sg.Name="CrashError"sg.ResetOnSpawn=false sg.DisplayOrder=10000000 sg.Parent=pg
+ local f=Instance.new("TextLabel")f.Size=UDim2.fromScale(.9,.4)f.Position=UDim2.fromScale(.05,.3)
+ f.BackgroundColor3=Color3.new(0,0,0)f.BackgroundTransparency=.25 f.TextColor3=Color3.fromRGB(255,90,90)
+ f.TextScaled=true f.TextWrapped=true f.Font=Enum.Font.Code
+ f.Text="SCRIPT ERROR (покажи это):\n"..err f.Parent=sg
+end
