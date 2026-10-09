@@ -5,6 +5,7 @@ local UIS=game:GetService("UserInputService")
 local cam=workspace.CurrentCamera
 local PGUI=P:WaitForChild("PlayerGui")
 
+-- УБОРКА ПРЕДЫДУЩИХ ЗАПУСКОВ (иначе кнопки мёртвые)
 for _,g in ipairs(PGUI:GetChildren())do
  if g.Name=="CombatGui"or g.Name=="CrashError"then g:Destroy()end
 end
@@ -93,7 +94,7 @@ showTab(1)
 
 local counts={}
 local function row(folder,lbl,getText,onClick)
- local y=6+counts[folder]*26
+ local y=6+(counts[folder]or 0)*26
  counts[folder]=(counts[folder]or 0)+1
  local b=Instance.new("TextButton")b.Size=UDim2.fromOffset(172,24)b.Position=UDim2.fromOffset(6,y) b.ZIndex=7
  b.BackgroundColor3=Color3.fromRGB(36,36,40)b.TextColor3=Color3.new(1,1,1)
