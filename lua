@@ -39,7 +39,7 @@ WHEEL.THOLD={"Always","Mouse1","Mouse2"}local thI=1
 WHEEL.DELAY={0,25,50,75,100,150,250}local dlI=3
 WHEEL.TFOV={1,2,3,5,8,12}local tfI=3
 WHEEL.TPART={"Head","UpperTorso","HumanoidRootPart","Any"}local tpI=1
-local A_VIS,A_TEAM,A_ROT,A_CIRC=true,true,true,true
+local A_VIS,A_TEAM,A_ROT,A_CIRC=true,true,false,true
 local E_HL,E_NAME,E_HP,E_DIST,E_TEAM=true,true,true,true,true
 local T_VIS,T_TEAM,T_AUTO=true,true,true
 
@@ -137,7 +137,7 @@ row(fT,"Visible check",function()return T_VIS and"ON"or"OFF"end,function()T_VIS=
 row(fT,"Team check",function()return T_TEAM and"ON"or"OFF"end,function()T_TEAM=not T_TEAM end)
 row(fT,"Auto fire",function()return T_AUTO and"ON"or"OFF"end,function()T_AUTO=not T_AUTO end)
 
-local circle=dnew and dnew("Circle")
+local circle=hasD and Dr.new("Circle") or nil
 if circle then
  circle.Thickness=1.5 circle.Filled=false circle.Color=Color3.fromRGB(0,255,120)
  circle.Transparency=.6 circle.NumSides=60 circle.Visible=false
@@ -179,6 +179,8 @@ end
 local function visible(o,pospart)
  local pr=RaycastParams.new()pr.FilterType=Enum.RaycastFilterType.Exclude
  local ig={P.Character}
+ local deb=workspace:FindFirstChild("Debris")
+ if deb then ig[#ig+1]=deb end
  if LOCK and LOCK.ch and LOCK.ch.Parent then ig[#ig+1]=LOCK.ch end
  pr.FilterDescendantsInstances=ig
  local hit=workspace:Raycast(o,pospart.Position-o,pr)
@@ -199,13 +201,16 @@ local function scanRigs()
  local function walk(node,depth)
   if depth>4 or #list>400 then return end
   for _,c in ipairs(node:GetChildren())do
+   local nm=c.Name
    if c:IsA("Model")then
-    if c~=P.Character and isRig(c)then
-     list[#list+1]=c
-    else
-     walk(c,depth+1)
+    if not string.find(nm,"Ragdoll")then
+     if c~=P.Character and isRig(c)then
+      list[#list+1]=c
+     else
+      walk(c,depth+1)
+     end
     end
-   elseif c:IsA("Folder")or c:IsA("Workspace")then
+   elseif (c:IsA("Folder")or c:IsA("Workspace"))and nm~="Debris"then
     walk(c,depth+1)
    end
   end
@@ -224,13 +229,22 @@ task.spawn(function()
    seen[ch]=true
    list[#list+1]={ch=ch,hum=ch:FindFirstChildOfClass("Humanoid"),plr=plr}
   end
+  local cf=workspace:FindFirstChild("Characters")
+  if cf then
+   for _,m in ipairs(cf:GetChildren())do
+    if m:IsA("Model")and isRig(m)then
+     local pl=game.Players:FindFirstChild(m.Name)or game.Players:GetPlayerFromCharacter(m)
+     if pl~=P then add(m,pl)end
+    end
+   end
+  end
   for _,pl in ipairs(game.Players:GetPlayers())do
    if pl~=P then add(pl.Character,pl)end
   end
   for _,m in ipairs(npcRigs)do
    if m.Parent then
     local pl=game.Players:GetPlayerFromCharacter(m)or game.Players:FindFirstChild(m.Name)
-    add(m,pl)
+    if pl~=P then add(m,pl)end
    end
   end
   TARGETS=list
@@ -281,8 +295,15 @@ RS:BindToRenderStep("NaAim",Enum.RenderPriority.Last.Value,function()
   if on then
    local vs=cam.ViewportSize
    local dx=sp.X-vs.X/2 local dy=sp.Y-vs.Y/2
-   local k=(1-WHEEL.SM[sI])
-   if math.abs(dx)>.5 or math.abs(dy)>.5 then mousemoverel(dx*k,dy*k)end
+   local mag=math.sqrt(dx*dx+dy*dy)
+   if mag>1.5 then
+    local k=(1-WHEEL.SM[sI])*.4
+    local mx,my=dx*k,dy*k
+    local m2=math.sqrt(mx*mx+my*my)
+    local cap=math.max(4,math.min(vs.X,vs.Y)*.02)
+    if m2>cap then local s=cap/m2 mx,my=mx*s,my*s end
+    mousemoverel(mx,my)
+   end
   end
  else
   local goal=CFrame.lookAt(o,pp.Position)
